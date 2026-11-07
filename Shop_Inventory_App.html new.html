@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electrical & Solar Shop Inventory</title>
+<style>
+:root{--navy:#1B2A41;--gold:#C9A227;--light:#F4F1E8;--bg:#eef0f4;--red:#C62828;--amber:#E08E00;--green:#2E7D32;--txt:#1b1f2a}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+#lock{position:fixed;inset:0;background:var(--navy);display:flex;align-items:center;justify-content:center;z-index:99;padding:16px}
+#lock .box{background:#fff;border-radius:14px;padding:28px 24px;width:100%;max-width:340px;text-align:center;border-top:6px solid var(--gold)}
+#lock h1{margin:0 0 4px;color:var(--navy);font-size:20px}#lock p{margin:0 0 16px;color:#667;font-size:13px}
+input,select,button{font:inherit}
+input,select{width:100%;padding:10px;border:1px solid #c5cad6;border-radius:8px;background:#fff}
+button{cursor:pointer;border:0;border-radius:8px;padding:10px 14px;background:var(--navy);color:#fff;font-weight:bold}
+button.gold{background:var(--gold);color:var(--navy)}button.red{background:var(--red)}button.ghost{background:#e3e6ee;color:var(--navy)}
+button.sm{padding:5px 9px;font-size:12px}
+#err{color:var(--red);font-size:13px;height:18px;margin:8px 0 0}
+header{background:var(--navy);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:18px;color:var(--gold)}header small{color:#cfd6e4}
+nav{display:flex;gap:6px;background:#fff;padding:8px;overflow-x:auto;border-bottom:2px solid var(--gold);position:sticky;top:0;z-index:5}
+nav button{background:#e3e6ee;color:var(--navy);white-space:nowrap}nav button.on{background:var(--navy);color:var(--gold)}
+main{padding:12px;max-width:1200px;margin:auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.card{background:#fff;border-radius:10px;padding:12px;text-align:center;border:1px solid #d7dbe5}
+.card b{display:block;font-size:12px;color:var(--navy);margin-bottom:6px}.card span{font-size:22px;font-weight:bold;color:var(--gold)}
+.panel{background:#fff;border-radius:10px;padding:12px;margin-bottom:14px;border:1px solid #d7dbe5}
+.panel h2{margin:0 0 10px;font-size:15px;color:var(--navy)}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:560px}
+th{background:var(--navy);color:#fff;padding:8px;font-size:12px;text-align:center}td{padding:7px 8px;border-bottom:1px solid #e3e6ee;font-size:13px}
+tr:nth-child(even) td{background:var(--light)}td.n{text-align:right}td.c{text-align:center}
+.tag{padding:3px 8px;border-radius:10px;font-weight:bold;font-size:11px;display:inline-block}
+.OK{background:#C6EFCE;color:#006100}.LOW{background:#FFEB9C;color:#9C5700}.OUT{background:#FFC7CE;color:#9C0006}
+.bar{background:#e3e6ee;border-radius:6px;height:10px;min-width:80px}.bar i{display:block;height:10px;border-radius:6px;background:var(--gold)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.row>*{flex:1;min-width:130px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end}
+label{font-size:12px;color:#556;display:block;margin-bottom:3px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:12px}
+#modal .box{background:#fff;border-radius:12px;padding:16px;width:100%;max-width:520px;max-height:90vh;overflow:auto}
+.hide{display:none!important}.note{font-size:12px;color:#667}
+</style></head><body>
+
+<div id="lock"><div class="box">
+<h1>⚡☀ Shop Inventory</h1><p>Password likhein / Enter password</p>
+<input id="pw" type="password" placeholder="Password" autocomplete="off" autocapitalize="off" autocorrect="off" onkeydown="if(event.key==='Enter')unlock()">
+<div id="err"></div><button class="gold" style="width:100%;margin-top:6px" onclick="unlock()">Kholein / Open</button>
+</div></div>
+
+<div id="app" class="hide">
+<header><div><h1 id="shopTitle">Electrical & Solar Shop</h1><small>Smart Inventory</small></div>
+<div><button class="ghost sm" onclick="logout()">🔒 Lock</button></div></header>
+<nav id="nav"></nav>
+<main id="view"></main>
+</div>
+<div id="modal"><div class="box" id="mbox"></div></div>
+
+<script>
+// ======= APNA PASSWORD YAHAN BADLEIN (ya app ke andar Settings se) =======
+var DEFAULT_PASSWORD = "shop786";
+// =========================================================================
+var KEY="esinv_v1", PWKEY="esinv_pw";
+var CATS=["Wires & Cables","Switches & Sockets","MCB & Protection","Lighting (LED)","Fans & Motors","Solar Panels","Solar Inverters","Batteries","Charge Controllers","Solar Accessories","Tools & Misc"];
+var UNITS=["Pcs","Coil","Meter","Set","Box","Pair","Kg"];
+function hash(s){var h=5381;s="esinv|"+String(s).trim().toLowerCase();for(var i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))|0}return String(h)}
+function sget(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function sset(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function pwHash(){return sget(PWKEY)||hash(DEFAULT_PASSWORD)}
+function unlock(){var v=document.getElementById("pw").value;
+ if(hash(v)===pwHash()){try{sessionStorage.setItem("esinv_ok","1")}catch(e){}start()}
+ else{document.getElementById("err").textContent="Password galat hai / Wrong password";document.getElementById("pw").value=""}}
+function logout(){try{sessionStorage.removeItem("esinv_ok")}catch(e){}location.reload()}
+
+var S;var tab="dash";
+function sample(){var a=[
+["WC-001","Wires & Cables","House Wire 3/29 Red","Fast","Coil",20,5,5200,5800],["WC-002","Wires & Cables","House Wire 3/29 Black","Fast","Coil",18,5,5200,5800],
+["WC-005","Wires & Cables","Solar DC Cable 6mm Red","Generic","Meter",150,50,115,140],["SS-001","Switches & Sockets","1-Way Switch","Broco","Pcs",120,30,70,100],
+["SS-003","Switches & Sockets","3-Pin Socket 13A","Broco","Pcs",60,20,160,220],["MP-001","MCB & Protection","MCB 16A Single Pole","Schneider","Pcs",40,10,380,520],
+["MP-003","MCB & Protection","DC MCB 32A (Solar)","Generic","Pcs",12,5,1250,1650],["LD-001","Lighting (LED)","LED Bulb 12W","Philips","Pcs",200,60,150,230],
+["LD-003","Lighting (LED)","Flood Light 50W","Generic","Pcs",20,8,1900,2600],["FM-001","Fans & Motors","Ceiling Fan 56 inch AC","Pak Fan","Pcs",15,5,9500,11500],
+["FM-002","Fans & Motors","DC Fan 12V (Solar)","Generic","Pcs",10,4,5500,7000],["SP-001","Solar Panels","Solar Panel 550W Mono","Jinko","Pcs",24,8,19500,22500],
+["SP-002","Solar Panels","Solar Panel 450W Mono","Longi","Pcs",16,6,16000,18500],["SI-001","Solar Inverters","Hybrid Inverter 3kW","Inverex","Pcs",5,2,95000,112000],
+["SI-002","Solar Inverters","Hybrid Inverter 5kW","Knox","Pcs",3,2,165000,189000],["BT-001","Batteries","Lithium Battery 48V 100Ah","Dyness","Pcs",2,2,255000,295000],
+["BT-002","Batteries","Tubular Battery 12V 150Ah","Osaka","Pcs",10,4,38000,43500],["CC-001","Charge Controllers","MPPT Controller 60A","Generic","Pcs",6,2,13500,17500],
+["SA-001","Solar Accessories","MC4 Connector Pair","Generic","Pair",100,30,140,220],["SA-002","Solar Accessories","Panel Mounting Structure","Local","Set",30,10,3200,4200],
+["TM-001","Tools & Misc","Insulation Tape","3M","Pcs",150,40,45,70],["TM-002","Tools & Misc","Digital Multimeter","Generic","Pcs",8,3,1800,2600]];
+return a.map(function(r){return{code:r[0],cat:r[1],name:r[2],brand:r[3],unit:r[4],open:r[5],min:r[6],pr:r[7],sr:r[8]}})}
+function load(){var j=sget(KEY);if(j){try{S=JSON.parse(j);return}catch(e){}}
+ var t=today();S={shop:"Electrical & Solar Shop",items:sample(),
+ ins:[{date:t,code:"SP-001",qty:10,rate:19500,party:"Solar Traders",ref:"B-1021"}],
+ outs:[{date:t,code:"SP-001",qty:4,rate:22500,party:"Ali Khan",ref:"Cash"},{date:t,code:"SI-001",qty:1,rate:112000,party:"Rashid Electric",ref:"Credit"}]};save()}
+function save(){sset(KEY,JSON.stringify(S))}
+function today(){return new Date().toISOString().slice(0,10)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function fmt(n){return Math.round(n||0).toLocaleString("en-US")}
+function find(code){return S.items.filter(function(i){return i.code===code})[0]}
+function calc(it){var i=0,o=0;S.ins.forEach(function(e){if(e.code===it.code)i+=+e.qty});S.outs.forEach(function(e){if(e.code===it.code)o+=+e.qty});
+ var cur=(+it.open)+i-o;var st=cur<=0?"OUT":cur<=(+it.min)?"LOW":"OK";
+ return{inq:i,outq:o,cur:cur,val:cur*it.pr,st:st,stTxt:st==="OUT"?"OUT OF STOCK":st,mg:it.sr?(it.sr-it.pr)/it.sr:0}}
+
+function start(){document.getElementById("lock").classList.add("hide");document.getElementById("app").classList.remove("hide");load();nav();render()}
+var TABS=[["dash","📊 Dashboard"],["inv","📦 Inventory"],["in","📥 Stock In"],["out","📤 Stock Out"],["set","⚙ Settings"]];
+function nav(){document.getElementById("nav").innerHTML=TABS.map(function(t){return'<button class="'+(tab===t[0]?"on":"")+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'}).join("")}
+function go(t){tab=t;nav();render()}
+function render(){document.getElementById("shopTitle").textContent="⚡ "+S.shop;var v=document.getElementById("view");
+ v.innerHTML=tab==="dash"?dash():tab==="inv"?inv():tab==="in"?stock("in"):tab==="out"?stock("out"):settings()}
+
+function dash(){var tv=0,low=0,out=0,pur=0,sal=0,pro=0,cr=0;
+ S.items.forEach(function(i){var c=calc(i);tv+=c.val;if(c.st==="LOW")low++;if(c.st==="OUT")out++});
+ S.ins.forEach(function(e){pur+=e.qty*e.rate});
+ S.outs.forEach(function(e){var it=find(e.code);var a=e.qty*e.rate;sal+=a;pro+=e.qty*(e.rate-(it?it.pr:0));if(e.ref==="Credit")cr+=a});
+ var K=[["Total Items",S.items.length],["Stock Value (Rs)",fmt(tv)],["Low Stock",low],["Out of Stock",out],["Total Purchases",fmt(pur)],["Total Sales",fmt(sal)],["Total Profit",fmt(pro)],["Credit Pending",fmt(cr)]];
+ var h='<div class="cards">'+K.map(function(k,i){var col=(i===2&&low)?"var(--amber)":(i===3&&out)?"var(--red)":"var(--gold)";return'<div class="card"><b>'+k[0]+'</b><span style="color:'+col+'">'+k[1]+'</span></div>'}).join("")+'</div>';
+ var rows="",max=1,cs=CATS.map(function(c){var n=0,v=0,l=0,o=0;S.items.forEach(function(i){if(i.cat===c){var x=calc(i);n++;v+=x.val;if(x.st==="LOW")l++;if(x.st==="OUT")o++}});if(v>max)max=v;return{c:c,n:n,v:v,l:l,o:o}});
+ cs.forEach(function(x){rows+='<tr><td>'+esc(x.c)+'</td><td class="c">'+x.n+'</td><td class="n">'+fmt(x.v)+'</td><td class="c">'+x.l+'</td><td class="c">'+x.o+'</td><td><div class="bar"><i style="width:'+(x.v/max*100)+'%"></i></div></td></tr>'});
+ h+='<div class="panel"><h2>Category Summary</h2><div class="tw"><table><tr><th>Category</th><th>Items</th><th>Stock Value (Rs)</th><th>Low</th><th>Out</th><th>Share</th></tr>'+rows+'</table></div></div>';
+ var al=S.items.filter(function(i){return calc(i).st!=="OK"});
+ h+='<div class="panel"><h2>⚠ Khareedari List (Low / Out of Stock)</h2>'+(al.length?'<div class="tw"><table><tr><th>Code</th><th>Item</th><th>Stock</th><th>Min</th><th>Status</th></tr>'+al.map(function(i){var c=calc(i);return'<tr><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td class="c">'+c.cur+'</td><td class="c">'+i.min+'</td><td class="c"><span class="tag '+c.st+'">'+c.stTxt+'</span></td></tr>'}).join("")+'</table></div>':'<p class="note">Sab items ka stock theek hai ✅</p>')+'</div>';
+ return h}
+
+var fq="",fc="",fs="";
+function inv(){var h='<div class="panel"><div class="row"><input placeholder="🔍 Search item / code / brand" value="'+esc(fq)+'" oninput="fq=this.value;redrawInv()">'
+ +'<select onchange="fc=this.value;redrawInv()"><option value="">Sab categories</option>'+CATS.map(function(c){return'<option'+(fc===c?" selected":"")+'>'+esc(c)+'</option>'}).join("")+'</select>'
+ +'<select onchange="fs=this.value;redrawInv()"><option value="">Sab status</option><option value="OK"'+(fs==="OK"?" selected":"")+'>OK</option><option value="LOW"'+(fs==="LOW"?" selected":"")+'>LOW</option><option value="OUT"'+(fs==="OUT"?" selected":"")+'>OUT OF STOCK</option></select>'
+ +'<button class="gold" onclick="itemForm()">+ Naya Item</button></div><div class="tw" id="invT"></div></div>';
+ setTimeout(redrawInv,0);return h}
+function redrawInv(){var q=fq.toLowerCase();var rows=S.items.filter(function(i){var c=calc(i);
+ return(!q||(i.code+i.name+i.brand).toLowerCase().indexOf(q)>-1)&&(!fc||i.cat===fc)&&(!fs||c.st===fs)}).map(function(i){var c=calc(i);
+ return'<tr><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'<br><span class="note">'+esc(i.cat)+' · '+esc(i.brand)+'</span></td><td class="c">'+esc(i.unit)+'</td><td class="c">'+c.inq+'</td><td class="c">'+c.outq+'</td><td class="c"><b>'+c.cur+'</b></td><td class="c">'+i.min+'</td><td class="n">'+fmt(i.pr)+'</td><td class="n">'+fmt(i.sr)+'</td><td class="n">'+fmt(c.val)+'</td><td class="c"><span class="tag '+c.st+'">'+c.stTxt+'</span></td><td class="c" style="white-space:nowrap"><button class="ghost sm" onclick="itemForm(\''+esc(i.code)+'\')">✏</button> <button class="red sm" onclick="delItem(\''+esc(i.code)+'\')">🗑</button></td></tr>'}).join("");
+ document.getElementById("invT").innerHTML='<table style="min-width:900px"><tr><th>Code</th><th>Item</th><th>Unit</th><th>IN</th><th>OUT</th><th>Stock</th><th>Min</th><th>Buy Rs</th><th>Sale Rs</th><th>Value Rs</th><th>Status</th><th></th></tr>'+(rows||'<tr><td colspan="12" class="c">Koi item nahi mila</td></tr>')+'</table>'}
+function modal(h){document.getElementById("mbox").innerHTML=h;document.getElementById("modal").style.display="flex"}
+function closeM(){document.getElementById("modal").style.display="none"}
+function opts(a,s){return a.map(function(x){return'<option'+(x===s?" selected":"")+'>'+esc(x)+'</option>'}).join("")}
+function itemForm(code){var i=code?find(code):{code:"",cat:CATS[0],name:"",brand:"",unit:"Pcs",open:0,min:0,pr:0,sr:0};
+ modal('<h2>'+(code?"Item Edit":"Naya Item")+'</h2><div class="form">'
+ +'<div><label>Item Code</label><input id="f_code" value="'+esc(i.code)+'" '+(code?"readonly":"")+'></div>'
+ +'<div><label>Category</label><select id="f_cat">'+opts(CATS,i.cat)+'</select></div>'
+ +'<div><label>Item Name</label><input id="f_name" value="'+esc(i.name)+'"></div>'
+ +'<div><label>Brand</label><input id="f_brand" value="'+esc(i.brand)+'"></div>'
+ +'<div><label>Unit</label><select id="f_unit">'+opts(UNITS,i.unit)+'</select></div>'
+ +'<div><label>Opening Stock</label><input id="f_open" type="number" value="'+i.open+'"></div>'
+ +'<div><label>Min Level (Alert)</label><input id="f_min" type="number" value="'+i.min+'"></div>'
+ +'<div><label>Purchase Rate</label><input id="f_pr" type="number" value="'+i.pr+'"></div>'
+ +'<div><label>Sale Rate</label><input id="f_sr" type="number" value="'+i.sr+'"></div></div>'
+ +'<div class="row" style="margin-top:14px"><button class="ghost" onclick="closeM()">Cancel</button><button class="gold" onclick="saveItem(\''+(code?esc(code):"")+'\')">Save</button></div>')}
+function saveItem(old){var g=function(x){return document.getElementById("f_"+x).value};var code=g("code").trim();
+ if(!code||!g("name").trim()){alert("Code aur Name zaroori hain");return}
+ if(!old&&find(code)){alert("Ye code pehle se maujood hai");return}
+ var o={code:code,cat:g("cat"),name:g("name").trim(),brand:g("brand").trim(),unit:g("unit"),open:+g("open")||0,min:+g("min")||0,pr:+g("pr")||0,sr:+g("sr")||0};
+ if(old){S.items[S.items.indexOf(find(old))]=o}else S.items.push(o);save();closeM();render()}
+function delItem(c){if(confirm("Item "+c+" delete karein? (iski entries bhi hat jayengi)")){S.items=S.items.filter(function(i){return i.code!==c});S.ins=S.ins.filter(function(e){return e.code!==c});S.outs=S.outs.filter(function(e){return e.code!==c});save();render()}}
+
+function stock(k){var isIn=k==="in",L=isIn?S.ins:S.outs;
+ var h='<div class="panel"><h2>'+(isIn?"📥 Maal Aaya (Stock In)":"📤 Maal Gaya (Stock Out)")+'</h2><div class="form">'
+ +'<div><label>Date</label><input id="s_date" type="date" value="'+today()+'"></div>'
+ +'<div><label>Item</label><select id="s_code" onchange="pickRate()">'+S.items.map(function(i){return'<option value="'+esc(i.code)+'">'+esc(i.code+" - "+i.name)+'</option>'}).join("")+'</select></div>'
+ +'<div><label>Qty</label><input id="s_qty" type="number" min="0"></div>'
+ +'<div><label>'+(isIn?"Purchase Rate":"Sale Rate")+'</label><input id="s_rate" type="number"></div>'
+ +'<div><label>'+(isIn?"Supplier":"Customer")+'</label><input id="s_party"></div>'
+ +'<div><label>'+(isIn?"Bill No.":"Payment")+'</label>'+(isIn?'<input id="s_ref">':'<select id="s_ref"><option>Cash</option><option>Credit</option><option>Bank / Online</option></select>')+'</div>'
+ +'<div><button class="gold" style="width:100%" onclick="addEntry(\''+k+'\')">+ Add</button></div></div></div>';
+ var rows=L.map(function(e,idx){var it=find(e.code);return{e:e,idx:idx,it:it}}).reverse().map(function(x){var e=x.e;var a=e.qty*e.rate;
+ return'<tr><td>'+esc(e.date)+'</td><td>'+esc(e.code)+'</td><td>'+esc(x.it?x.it.name:"?")+'</td><td class="c">'+e.qty+'</td><td class="n">'+fmt(e.rate)+'</td><td class="n">'+fmt(a)+'</td>'+(isIn?"":'<td class="n">'+fmt(e.qty*(e.rate-(x.it?x.it.pr:0)))+'</td>')+'<td>'+esc(e.party)+'</td><td>'+esc(e.ref)+'</td><td class="c"><button class="red sm" onclick="delEntry(\''+k+'\','+x.idx+')">🗑</button></td></tr>'}).join("");
+ h+='<div class="panel"><div class="tw"><table style="min-width:700px"><tr><th>Date</th><th>Code</th><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th>'+(isIn?"":"<th>Profit</th>")+'<th>'+(isIn?"Supplier":"Customer")+'</th><th>'+(isIn?"Bill":"Payment")+'</th><th></th></tr>'+(rows||'<tr><td colspan="10" class="c">Abhi koi entry nahi</td></tr>')+'</table></div></div>';
+ setTimeout(pickRate,0);return h}
+function pickRate(){var s=document.getElementById("s_code");if(!s)return;var it=find(s.value);if(it)document.getElementById("s_rate").value=tab==="in"?it.pr:it.sr}
+function addEntry(k){var code=document.getElementById("s_code").value,q=+document.getElementById("s_qty").value,r=+document.getElementById("s_rate").value;
+ if(!code||q<=0){alert("Item aur Qty likhein");return}
+ var it=find(code);
+ if(k==="out"&&it&&q>calc(it).cur&&!confirm("Stock sirf "+calc(it).cur+" hai. Phir bhi add karein?"))return;
+ var e={date:document.getElementById("s_date").value,code:code,qty:q,rate:r,party:document.getElementById("s_party").value,ref:document.getElementById("s_ref").value};
+ (k==="in"?S.ins:S.outs).push(e);save();render()}
+function delEntry(k,i){if(confirm("Ye entry delete karein?")){(k==="in"?S.ins:S.outs).splice(i,1);save();render()}}
+
+function settings(){return'<div class="panel"><h2>🏪 Shop ka Naam</h2><div class="row"><input id="st_name" value="'+esc(S.shop)+'"><button class="gold" onclick="S.shop=document.getElementById(\'st_name\').value||S.shop;save();render()">Save</button></div></div>'
+ +'<div class="panel"><h2>🔑 Password Badlein</h2><div class="row"><input id="st_pw" type="password" placeholder="Naya password"><button class="gold" onclick="setPw()">Change</button></div><p class="note">Ye sirf basic lock hai (is device/browser par). Bohat sensitive data ke liye server wali security chahiye.</p></div>'
+ +'<div class="panel"><h2>💾 Backup</h2><div class="row"><button onclick="backup()">Backup Download (JSON)</button><button onclick="csv()">Inventory CSV (Excel)</button><button class="ghost" onclick="document.getElementById(\'rf\').click()">Backup Restore</button><input id="rf" type="file" accept=".json" class="hide" onchange="restore(this)"></div></div>'
+ +'<div class="panel"><h2>🧹 Sample Data</h2><p class="note">Pehli dafa sample items dikhte hain. Apna kaam shuru karne se pehle sab saaf kar dein.</p><button class="red" onclick="clearAll()">Sab Data Saaf Karein</button></div>'}
+function setPw(){var v=document.getElementById("st_pw").value;if(v.length<3){alert("Kam az kam 3 characters");return}sset(PWKEY,hash(v));alert("Password badal gaya ✅");document.getElementById("st_pw").value=""}
+function dl(name,txt,type){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:type}));a.download=name;a.click()}
+function backup(){dl("inventory-backup-"+today()+".json",JSON.stringify(S),"application/json")}
+function csv(){var r=[["Code","Category","Item","Brand","Unit","Opening","IN","OUT","Stock","Min","Buy Rate","Sale Rate","Value","Status"]];
+ S.items.forEach(function(i){var c=calc(i);r.push([i.code,i.cat,i.name,i.brand,i.unit,i.open,c.inq,c.outq,c.cur,i.min,i.pr,i.sr,c.val,c.stTxt])});
+ dl("inventory-"+today()+".csv","\ufeff"+r.map(function(x){return x.map(function(v){return'"'+String(v).replace(/"/g,'""')+'"'}).join(",")}).join("\n"),"text/csv")}
+function restore(inp){var f=inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){try{var d=JSON.parse(rd.result);if(!d.items)throw 0;S=d;save();render();alert("Restore ho gaya ✅")}catch(e){alert("File sahi nahi hai")}};rd.readAsText(f)}
+function clearAll(){if(confirm("Sab items aur entries delete ho jayengi. Pakka?")){S.items=[];S.ins=[];S.outs=[];save();render()}}
+
+try{if(sessionStorage.getItem("esinv_ok")==="1")start();else document.getElementById("pw").focus()}catch(e){}
+</script></body></html>
